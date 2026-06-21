@@ -6,10 +6,10 @@
 -- Salin skema ini ke SQL Editor di dasbor Supabase Anda.
 -- =========================================================================
 
--- 1. Hapus tabel jika sudah ada (Opsional, gunakan untuk reset)
--- DROP TABLE IF EXISTS stock_transactions;
--- DROP TABLE IF EXISTS products;
--- DROP TABLE IF EXISTS categories;
+-- 1. Hapus tabel jika sudah ada (Wajib untuk mereset ke skema multi-toko baru)
+DROP TABLE IF EXISTS stock_transactions CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
+DROP TABLE IF EXISTS categories CASCADE;
 
 -- 2. Membuat Tabel Kategori (categories)
 CREATE TABLE categories (

@@ -39,6 +39,7 @@ const Login: React.FC = () => {
       if (isSignUpMode) {
         await signUp(email, password);
         if (isSupabaseConnected) {
+          alert('Pendaftaran Berhasil! 📧\n\nSilakan periksa kotak masuk atau folder spam email Anda untuk memverifikasi akun Anda sebelum masuk ke dashboard.');
           setSignUpSuccess(true);
           setValidationError(null);
         }
