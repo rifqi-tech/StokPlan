@@ -8,7 +8,7 @@ const Barang: React.FC = () => {
     products, 
     categories, 
     addTransaction, 
-    updateProductPrices, 
+    updateProduct, 
     deleteProduct, 
     addCategory, 
     updateCategory, 
@@ -77,9 +77,14 @@ const Barang: React.FC = () => {
     return true; // Not used in folder list, but good fallback
   });
 
-  const filteredProducts = productsInActiveCategory.filter(p => 
-    p.nama_barang.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProducts = productsInActiveCategory
+    .filter(p => p.nama_barang.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      if (a.harga_jual !== b.harga_jual) {
+        return a.harga_jual - b.harga_jual;
+      }
+      return a.nama_barang.localeCompare(b.nama_barang);
+    });
 
   // Handlers for Transactions
   const openTxModal = (product: Product, type: 'masuk' | 'keluar') => {
@@ -129,6 +134,10 @@ const Barang: React.FC = () => {
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editModalInputs.nama_barang.trim()) {
+      setValidationError('Nama barang tidak boleh kosong');
+      return;
+    }
     if (editModalInputs.harga_modal <= 0) {
       setValidationError('Harga modal harus lebih besar dari 0');
       return;
@@ -139,15 +148,16 @@ const Barang: React.FC = () => {
     }
 
     try {
-      await updateProductPrices(
+      await updateProduct(
         editModalInputs.id, 
+        editModalInputs.nama_barang,
         editModalInputs.harga_modal, 
         editModalInputs.harga_jual,
         editModalInputs.category_id || null
       );
       setIsEditModalOpen(false);
     } catch (err: any) {
-      setValidationError(err.message || 'Gagal merubah harga');
+      setValidationError(err.message || 'Gagal merubah data barang');
     }
   };
 
@@ -631,16 +641,26 @@ const Barang: React.FC = () => {
         <div className="modal-overlay" onClick={() => setIsEditModalOpen(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Ubah Harga Barang</h3>
+              <h3 className="modal-title">Ubah Detail Barang</h3>
               <button className="btn-icon-only" onClick={() => setIsEditModalOpen(false)}>
                 <X size={16} />
               </button>
             </div>
 
             <form onSubmit={handleEditSubmit}>
-              <div style={{ marginBottom: '16px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Nama Barang:</span>
-                <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '2px' }}>{editModalInputs.nama_barang}</div>
+              <div className="form-group">
+                <label htmlFor="edit-nama">Nama Barang</label>
+                <input 
+                  id="edit-nama"
+                  type="text" 
+                  className="input-control" 
+                  value={editModalInputs.nama_barang}
+                  onChange={(e) => {
+                    setEditModalInputs({ ...editModalInputs, nama_barang: e.target.value });
+                    setValidationError(null);
+                  }}
+                  required
+                />
               </div>
 
               <div className="form-group">
@@ -706,7 +726,7 @@ const Barang: React.FC = () => {
               )}
 
               <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Menyimpan...' : 'Perbarui Harga'}
+                {loading ? 'Menyimpan...' : 'Perbarui Barang'}
               </button>
             </form>
           </div>

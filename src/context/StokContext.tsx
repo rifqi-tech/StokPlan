@@ -49,7 +49,7 @@ interface StokContextType {
   signUp: (email: string, pass: string) => Promise<void>;
   signOut: () => Promise<void>;
   addProduct: (nama: string, hargaModal: number, hargaJual: number, stokAwal: number, categoryId?: string | null) => Promise<void>;
-  updateProductPrices: (id: string, hargaModal: number, hargaJual: number, categoryId?: string | null) => Promise<void>;
+  updateProduct: (id: string, nama: string, hargaModal: number, hargaJual: number, categoryId?: string | null) => Promise<void>;
   addTransaction: (productId: string, tipe: 'masuk' | 'keluar', jumlah: number) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addCategory: (nama: string) => Promise<void>;
@@ -454,11 +454,12 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateProductPrices = async (id: string, hargaModal: number, hargaJual: number, categoryId?: string | null) => {
+  const updateProduct = async (id: string, nama: string, hargaModal: number, hargaJual: number, categoryId?: string | null) => {
     setLoading(true);
     setError(null);
     try {
       if (!user) throw new Error('Pengguna tidak terautentikasi');
+      if (!nama.trim()) throw new Error('Nama barang tidak boleh kosong');
       if (hargaModal <= 0) throw new Error('Harga modal harus lebih besar dari 0');
       if (hargaJual <= 0) throw new Error('Harga jual harus lebih besar dari 0');
 
@@ -466,6 +467,7 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { error: pError } = await supabase
           .from('products')
           .update({
+            nama_barang: nama.trim(),
             harga_modal: hargaModal,
             harga_jual: hargaJual,
             category_id: categoryId || null
@@ -478,7 +480,13 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Local mock mode
         const updatedProducts = products.map(p => {
           if (p.id === id) {
-            return { ...p, harga_modal: hargaModal, harga_jual: hargaJual, category_id: categoryId || null };
+            return { 
+              ...p, 
+              nama_barang: nama.trim(), 
+              harga_modal: hargaModal, 
+              harga_jual: hargaJual, 
+              category_id: categoryId || null 
+            };
           }
           return p;
         });
@@ -488,7 +496,7 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Gagal merubah harga barang');
+      setError(err.message || 'Gagal merubah data barang');
       throw err;
     } finally {
       setLoading(false);
@@ -702,7 +710,7 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signUp,
       signOut,
       addProduct,
-      updateProductPrices,
+      updateProduct: updateProduct,
       addTransaction,
       deleteProduct,
       addCategory,
