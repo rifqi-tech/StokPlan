@@ -173,7 +173,7 @@ const Dashboard: React.FC = () => {
             {formatRupiah(totalModal)}
           </h2>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Dihitung dari total (Stok × Harga Modal) semua barang
+            Dihitung dari akumulasi modal semua barang masuk
           </p>
         </div>
 

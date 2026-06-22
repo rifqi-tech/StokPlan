@@ -391,14 +391,20 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Calculations
-  const totalModal = products.reduce((sum, p) => sum + (p.stok * p.harga_modal), 0);
+  const totalModal = transactions
+    .filter(t => t.tipe === 'masuk')
+    .reduce((sum, t) => {
+      const product = products.find(p => p.id === t.product_id);
+      const cost = product ? product.harga_modal : 0;
+      return sum + (t.jumlah * cost);
+    }, 0);
   
   const totalOmset = transactions
     .filter(t => t.tipe === 'keluar')
     .reduce((sum, t) => {
       const product = products.find(p => p.id === t.product_id);
-      const cost = product ? product.harga_modal : 0;
-      return sum + (t.jumlah * cost);
+      const price = product ? product.harga_jual : 0;
+      return sum + (t.jumlah * price);
     }, 0);
 
   // Actions
