@@ -369,6 +369,45 @@ const Dashboard: React.FC = () => {
               )}
             </div>
 
+            {/* Hardware Barcode Gun Input */}
+            <div style={{ marginBottom: '16px' }}>
+              <input 
+                type="text" 
+                placeholder="Atau tembak barcode dengan scanner gun..." 
+                className="input-control" 
+                style={{ 
+                  padding: '10px 14px', 
+                  fontSize: '13px', 
+                  borderRadius: '12px',
+                  background: 'rgba(255,255,255,0.03)',
+                  borderColor: 'rgba(255,255,255,0.1)'
+                }}
+                autoFocus
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const code = (e.target as HTMLInputElement).value.trim();
+                    if (!code) return;
+                    setScanMessage({ type: 'info', text: `Memproses barcode: ${code}...` });
+                    try {
+                      const productName = await scanOutBarcode(code);
+                      setScanMessage({ 
+                        type: 'success', 
+                        text: `Berhasil menjual: ${productName} (Barcode: ${code})!` 
+                      });
+                      (e.target as HTMLInputElement).value = '';
+                      setTimeout(() => {
+                        setIsScannerOpen(false);
+                        setScanMessage(null);
+                      }, 1800);
+                    } catch (err: any) {
+                      setScanMessage({ type: 'error', text: err.message || 'Gagal memproses Scan Out' });
+                    }
+                  }
+                }}
+              />
+            </div>
+
             {/* Scan Message / Status */}
             {scanMessage && (
               <div className={`badge ${
