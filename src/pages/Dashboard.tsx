@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStok } from '../context/StokContext';
-import { History, Package, DollarSign, ArrowUpRight, ArrowDownLeft, LogOut, AlertTriangle, X } from 'lucide-react';
+import { History, Package, DollarSign, ArrowUpRight, ArrowDownLeft, LogOut, AlertTriangle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -13,6 +13,30 @@ const Dashboard: React.FC = () => {
 
   // Report states
   const [isReportOpen, setIsReportOpen] = React.useState(false);
+  const [reportDate, setReportDate] = React.useState(new Date());
+
+  const prevMonth = () => {
+    setReportDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(newDate.getMonth() - 1);
+      return newDate;
+    });
+  };
+
+  const nextMonth = () => {
+    setReportDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(newDate.getMonth() + 1);
+      return newDate;
+    });
+  };
+
+  // Helper to check if the given date represents the current month or future
+  const isFutureMonth = (date: Date) => {
+    const today = new Date();
+    return date.getFullYear() > today.getFullYear() || 
+      (date.getFullYear() === today.getFullYear() && date.getMonth() >= today.getMonth());
+  };
 
   const formatRupiah = (val: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -35,25 +59,32 @@ const Dashboard: React.FC = () => {
       return sum + (t.jumlah * price);
     }, 0);
 
-  // 2. Hitung total omset bulan ini (penjualan keluar bulan ini)
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
+  // Target month and year from reportDate state
+  const targetMonth = reportDate.getMonth();
+  const targetYear = reportDate.getFullYear();
 
-  const totalOmsetThisMonth = transactions
+  // 2. Hitung total omset untuk bulan yang terpilih (bulan laporan)
+  const totalOmsetSelectedMonth = transactions
     .filter(t => t.tipe === 'keluar')
-    .filter(t => new Date(t.created_at) >= startOfMonth)
+    .filter(t => {
+      const d = new Date(t.created_at);
+      return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
+    })
     .reduce((sum, t) => {
       const product = products.find(p => p.id === t.product_id);
       const price = product ? product.harga_jual : 0;
       return sum + (t.jumlah * price);
     }, 0);
 
-  // 3. Kelompokkan omset harian per tanggal
-  const dailyOmsetReport: { tanggalStr: string; dateObj: Date; total: number }[] = [];
+  // 3. Kelompokkan omset harian per tanggal untuk bulan yang terpilih
+  const dailyOmsetReportForSelectedMonth: { tanggalStr: string; dateObj: Date; total: number }[] = [];
 
   transactions
     .filter(t => t.tipe === 'keluar')
+    .filter(t => {
+      const d = new Date(t.created_at);
+      return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
+    })
     .forEach(t => {
       const date = new Date(t.created_at);
       const dateStr = date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -62,11 +93,11 @@ const Dashboard: React.FC = () => {
       const price = product ? product.harga_jual : 0;
       const subtotal = t.jumlah * price;
 
-      const existingIndex = dailyOmsetReport.findIndex(r => r.tanggalStr === dateStr);
+      const existingIndex = dailyOmsetReportForSelectedMonth.findIndex(r => r.tanggalStr === dateStr);
       if (existingIndex > -1) {
-        dailyOmsetReport[existingIndex].total += subtotal;
+        dailyOmsetReportForSelectedMonth[existingIndex].total += subtotal;
       } else {
-        dailyOmsetReport.push({
+        dailyOmsetReportForSelectedMonth.push({
           tanggalStr: dateStr,
           dateObj: date,
           total: subtotal
@@ -75,7 +106,7 @@ const Dashboard: React.FC = () => {
     });
 
   // Urutkan laporan dari tanggal terbaru ke terlama
-  dailyOmsetReport.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+  dailyOmsetReportForSelectedMonth.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
 
   // Compute some quick stats
   const totalBarangTipe = products.length;
@@ -84,14 +115,17 @@ const Dashboard: React.FC = () => {
 
   const recentTransactions = transactions.slice(0, 4);
 
-  // Fungsi untuk mengunduh laporan bulanan dalam format CSV/Excel
+  // Fungsi untuk mengunduh laporan bulanan dalam format CSV/Excel (mengikuti bulan aktif)
   const downloadCSV = () => {
     try {
-      const headers = ["Tanggal", "Total Omset (Rupiah)"];
-      const rows = dailyOmsetReport.map(r => `"${r.tanggalStr}",${r.total}`);
+      const monthName = reportDate.toLocaleString('id-ID', { month: 'long' });
+      const year = reportDate.getFullYear();
+
+      const headers = ["Tanggal", `Total Omset - ${monthName} ${year} (Rupiah)`];
+      const rows = dailyOmsetReportForSelectedMonth.map(r => `"${r.tanggalStr}",${r.total}`);
       
       rows.push("");
-      rows.push(`"Total Omset Bulan Ini",${totalOmsetThisMonth}`);
+      rows.push(`"Total Omset Bulan ${monthName}",${totalOmsetSelectedMonth}`);
 
       const csvContent = [headers.join(","), ...rows].join("\n");
       // Add UTF-8 BOM so Excel opens it with correct encoding/accent marks
@@ -99,10 +133,6 @@ const Dashboard: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      
-      const date = new Date();
-      const monthName = date.toLocaleString('id-ID', { month: 'long' });
-      const year = date.getFullYear();
       
       link.setAttribute("download", `Laporan_Omset_${monthName}_${year}.csv`);
       document.body.appendChild(link);
@@ -557,15 +587,69 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
 
+            {/* Month Navigation Selector */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: '16px', 
+              padding: '10px 14px', 
+              background: 'rgba(255, 255, 255, 0.02)', 
+              borderRadius: '14px', 
+              border: '1px solid var(--border-color)',
+              flexShrink: 0
+            }}>
+              <button 
+                type="button" 
+                onClick={prevMonth} 
+                className="btn-icon-only" 
+                style={{ 
+                  width: '36px', 
+                  height: '36px', 
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid var(--border-color)'
+                }}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'capitalize' }}>
+                {reportDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}
+              </span>
+              <button 
+                type="button" 
+                onClick={nextMonth} 
+                disabled={isFutureMonth(reportDate)} 
+                className="btn-icon-only" 
+                style={{ 
+                  width: '36px', 
+                  height: '36px', 
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid var(--border-color)',
+                  opacity: isFutureMonth(reportDate) ? 0.3 : 1, 
+                  pointerEvents: isFutureMonth(reportDate) ? 'none' : 'auto' 
+                }}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
             {/* Scrollable Report Content */}
             <div style={{ overflowY: 'auto', flex: 1, paddingRight: '4px', marginBottom: '16px' }}>
-              {dailyOmsetReport.length === 0 ? (
+              {dailyOmsetReportForSelectedMonth.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '14px' }}>
-                  Belum ada transaksi penjualan yang tercatat.
+                  Belum ada transaksi penjualan yang tercatat pada bulan ini.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {dailyOmsetReport.map((day, idx) => (
+                  {dailyOmsetReportForSelectedMonth.map((day, idx) => (
                     <div 
                       key={idx} 
                       className="glass-card" 
@@ -608,17 +692,17 @@ const Dashboard: React.FC = () => {
             }}>
               <div>
                 <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', display: 'block' }}>
-                  Total Bulan Ini
+                  Total Omset {reportDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}
                 </span>
                 <span className="text-success" style={{ fontSize: '20px', fontWeight: 900, fontFamily: 'var(--font-display)', marginTop: '2px', display: 'block' }}>
-                  {formatRupiah(totalOmsetThisMonth)}
+                  {formatRupiah(totalOmsetSelectedMonth)}
                 </span>
               </div>
               <span style={{ fontSize: '24px' }}>📈</span>
             </div>
 
             {/* Download CSV/Excel Report Button */}
-            {dailyOmsetReport.length > 0 && (
+            {dailyOmsetReportForSelectedMonth.length > 0 && (
               <button
                 type="button"
                 onClick={downloadCSV}
