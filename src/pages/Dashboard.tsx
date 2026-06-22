@@ -84,6 +84,36 @@ const Dashboard: React.FC = () => {
 
   const recentTransactions = transactions.slice(0, 4);
 
+  // Fungsi untuk mengunduh laporan bulanan dalam format CSV/Excel
+  const downloadCSV = () => {
+    try {
+      const headers = ["Tanggal", "Total Omset (Rupiah)"];
+      const rows = dailyOmsetReport.map(r => `"${r.tanggalStr}",${r.total}`);
+      
+      rows.push("");
+      rows.push(`"Total Omset Bulan Ini",${totalOmsetThisMonth}`);
+
+      const csvContent = [headers.join(","), ...rows].join("\n");
+      // Add UTF-8 BOM so Excel opens it with correct encoding/accent marks
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      
+      const date = new Date();
+      const monthName = date.toLocaleString('id-ID', { month: 'long' });
+      const year = date.getFullYear();
+      
+      link.setAttribute("download", `Laporan_Omset_${monthName}_${year}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Gagal mengunduh CSV:", err);
+      alert("Gagal membuat file laporan.");
+    }
+  };
+
   // Lifecycle hook for barcode scanner camera (Scan Out)
   React.useEffect(() => {
     let html5QrCode: Html5Qrcode | null = null;
@@ -586,6 +616,33 @@ const Dashboard: React.FC = () => {
               </div>
               <span style={{ fontSize: '24px' }}>📈</span>
             </div>
+
+            {/* Download CSV/Excel Report Button */}
+            {dailyOmsetReport.length > 0 && (
+              <button
+                type="button"
+                onClick={downloadCSV}
+                className="btn btn-primary"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '14px',
+                  fontSize: '14px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  boxShadow: '0 0 12px rgba(16, 185, 129, 0.25)',
+                  border: 'none',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  marginBottom: '10px',
+                  flexShrink: 0
+                }}
+              >
+                <span>📥 Unduh Laporan (CSV / Excel)</span>
+              </button>
+            )}
 
             <button 
               type="button" 
