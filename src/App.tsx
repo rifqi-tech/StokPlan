@@ -189,7 +189,7 @@ const AppContent: React.FC = () => {
 
       {/* Premium Bottom Navigation */}
       {showBottomNav && (
-        <nav className="bottom-nav" style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1.2fr 1fr', alignItems: 'center' }}>
+        <nav className="bottom-nav" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', alignItems: 'center' }}>
           <NavLink 
             to="/dashboard" 
             className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}
@@ -209,18 +209,15 @@ const AppContent: React.FC = () => {
           {/* Camera Scan Trigger Button */}
           <button 
             type="button" 
-            className="bottom-nav-item camera-fab"
+            className="bottom-nav-item scan-struk-nav"
             onClick={triggerCamera}
             style={{ 
               background: 'none', 
               border: 'none', 
-              cursor: 'pointer',
-              color: 'var(--text-secondary)'
+              cursor: 'pointer'
             }}
           >
-            <div className="camera-fab-circle">
-              <Camera size={22} style={{ color: '#fff' }} />
-            </div>
+            <Camera />
             <span>Scan Struk</span>
           </button>
 

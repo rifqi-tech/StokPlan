@@ -474,35 +474,31 @@ h1, h2, h3, h4, h5, h6 {
 .font-bold { font-weight: 700; }
 .font-black { font-weight: 900; }
 
-/* Floating Camera Action Button (FAB) */
-.camera-fab {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.camera-fab-circle {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--gradient-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 15px rgba(217, 70, 239, 0.4), var(--shadow-glow-pink);
-  border: 2px solid rgba(255, 255, 255, 0.15);
+/* Scan Struk Nav Item (Flat but glowing) */
+.bottom-nav-item.scan-struk-nav {
+  color: var(--primary);
+  background: rgba(217, 70, 239, 0.05);
+  border: 1px solid rgba(217, 70, 239, 0.2);
+  box-shadow: 0 0 10px rgba(217, 70, 239, 0.1);
+  border-radius: 16px;
+  cursor: pointer;
   transition: var(--transition-spring);
-  margin-top: -18px; /* Elevated look */
 }
 
-.camera-fab:hover .camera-fab-circle {
-  transform: scale(1.1) translateY(-4px);
-  box-shadow: 0 6px 20px rgba(217, 70, 239, 0.6), var(--shadow-glow-pink);
+.bottom-nav-item.scan-struk-nav svg {
+  color: var(--primary);
+  filter: drop-shadow(0 0 5px rgba(217, 70, 239, 0.6));
 }
 
-.camera-fab:active .camera-fab-circle {
+.bottom-nav-item.scan-struk-nav:hover {
+  background: rgba(217, 70, 239, 0.1);
+  transform: translateY(-2px) scale(1.05);
+  color: var(--text-primary);
+  border-color: rgba(217, 70, 239, 0.4);
+  box-shadow: 0 0 15px rgba(217, 70, 239, 0.2);
+}
+
+.bottom-nav-item.scan-struk-nav:active {
   transform: scale(0.95);
 }
 

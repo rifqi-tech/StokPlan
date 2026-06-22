@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 
 const Dashboard: React.FC = () => {
-  const { totalModal, totalOmset, products, transactions, loading, isSupabaseConnected, user, signOut, scanOutBarcode } = useStok();
+  const { totalModal, totalOmset, products, transactions, loading, user, signOut, scanOutBarcode } = useStok();
 
   // Scan Out states
   const [isScannerOpen, setIsScannerOpen] = React.useState(false);
@@ -125,42 +125,8 @@ const Dashboard: React.FC = () => {
     <div className="main-content animate-fade-in">
       <div className="header-bar">
         <div>
-          <span className="text-xs text-muted font-bold font-display" style={{ letterSpacing: '1px', textTransform: 'uppercase' }}>YO, WELCOME BACK! 👋</span>
+          <span className="text-xs text-muted font-mono" style={{ opacity: 0.6 }}>@rrippkii</span>
           <h1 className="header-title" style={{ margin: 0, fontSize: '32px' }}>StokPlan</h1>
-        </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <div className={isSupabaseConnected ? "badge badge-success" : "badge"} style={{ 
-            background: isSupabaseConnected ? 'var(--success-bg)' : 'rgba(245, 158, 11, 0.1)', 
-            borderColor: isSupabaseConnected ? 'var(--success-border)' : 'rgba(245, 158, 11, 0.25)', 
-            color: isSupabaseConnected ? 'var(--success)' : 'var(--warning)',
-            borderWidth: '1px',
-            borderStyle: 'solid'
-          }}>
-            <span>{isSupabaseConnected ? 'Cloud' : 'Demo'}</span>
-          </div>
-          
-          <button 
-            onClick={() => {
-              setScanMessage(null);
-              setIsScannerOpen(true);
-            }}
-            className="btn btn-primary" 
-            style={{ 
-              width: 'auto', 
-              padding: '10px 14px', 
-              borderRadius: '12px', 
-              fontSize: '13px',
-              background: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
-              boxShadow: '0 0 12px rgba(236, 72, 153, 0.35)',
-              border: 'none',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <span>📷 Scan Out</span>
-          </button>
         </div>
       </div>
 
@@ -226,11 +192,34 @@ const Dashboard: React.FC = () => {
           <h2 style={{ fontSize: '28px', fontWeight: 800, margin: '0 0 6px 0', fontFamily: 'var(--font-display)' }} className="text-success">
             {formatRupiah(totalOmset)}
           </h2>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Dihitung dari total (Jumlah × Harga Jual) transaksi keluar
-          </p>
         </div>
       </div>
+
+      {/* GLOWING SCAN OUT BUTTON */}
+      <button
+        onClick={() => {
+          setScanMessage(null);
+          setIsScannerOpen(true);
+        }}
+        className="btn btn-primary"
+        style={{
+          width: '100%',
+          padding: '16px',
+          borderRadius: '18px',
+          fontSize: '16px',
+          background: 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
+          boxShadow: '0 0 25px rgba(236, 72, 153, 0.35)',
+          border: 'none',
+          fontWeight: 800,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          margin: '4px 0'
+        }}
+      >
+        <span>📷 Scan Out (Keluar Barang)</span>
+      </button>
 
       {/* QUICK STATS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>

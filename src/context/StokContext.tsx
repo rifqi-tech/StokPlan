@@ -397,8 +397,8 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
     .filter(t => t.tipe === 'keluar')
     .reduce((sum, t) => {
       const product = products.find(p => p.id === t.product_id);
-      const price = product ? product.harga_jual : 0;
-      return sum + (t.jumlah * price);
+      const cost = product ? product.harga_modal : 0;
+      return sum + (t.jumlah * cost);
     }, 0);
 
   // Actions
