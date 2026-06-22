@@ -5,11 +5,14 @@ import { Link } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 
 const Dashboard: React.FC = () => {
-  const { totalModal, totalOmset, products, transactions, loading, user, signOut, scanOutBarcode } = useStok();
+  const { totalModal, products, transactions, loading, user, signOut, scanOutBarcode } = useStok();
 
   // Scan Out states
   const [isScannerOpen, setIsScannerOpen] = React.useState(false);
   const [scanMessage, setScanMessage] = React.useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  // Report states
+  const [isReportOpen, setIsReportOpen] = React.useState(false);
 
   const formatRupiah = (val: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -18,6 +21,61 @@ const Dashboard: React.FC = () => {
       maximumFractionDigits: 0
     }).format(val);
   };
+
+  // 1. Hitung total omset hari ini (penjualan keluar hari ini)
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const totalOmsetToday = transactions
+    .filter(t => t.tipe === 'keluar')
+    .filter(t => new Date(t.created_at) >= todayStart)
+    .reduce((sum, t) => {
+      const product = products.find(p => p.id === t.product_id);
+      const price = product ? product.harga_jual : 0;
+      return sum + (t.jumlah * price);
+    }, 0);
+
+  // 2. Hitung total omset bulan ini (penjualan keluar bulan ini)
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const totalOmsetThisMonth = transactions
+    .filter(t => t.tipe === 'keluar')
+    .filter(t => new Date(t.created_at) >= startOfMonth)
+    .reduce((sum, t) => {
+      const product = products.find(p => p.id === t.product_id);
+      const price = product ? product.harga_jual : 0;
+      return sum + (t.jumlah * price);
+    }, 0);
+
+  // 3. Kelompokkan omset harian per tanggal
+  const dailyOmsetReport: { tanggalStr: string; dateObj: Date; total: number }[] = [];
+
+  transactions
+    .filter(t => t.tipe === 'keluar')
+    .forEach(t => {
+      const date = new Date(t.created_at);
+      const dateStr = date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      
+      const product = products.find(p => p.id === t.product_id);
+      const price = product ? product.harga_jual : 0;
+      const subtotal = t.jumlah * price;
+
+      const existingIndex = dailyOmsetReport.findIndex(r => r.tanggalStr === dateStr);
+      if (existingIndex > -1) {
+        dailyOmsetReport[existingIndex].total += subtotal;
+      } else {
+        dailyOmsetReport.push({
+          tanggalStr: dateStr,
+          dateObj: date,
+          total: subtotal
+        });
+      }
+    });
+
+  // Urutkan laporan dari tanggal terbaru ke terlama
+  dailyOmsetReport.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
 
   // Compute some quick stats
   const totalBarangTipe = products.length;
@@ -178,20 +236,29 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Total Omset Card */}
-        <div className="glass-card" style={{ 
-          position: 'relative', 
-          overflow: 'hidden',
-          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(22, 30, 49, 0.7) 100%)' 
-        }}>
+        <div 
+          className="glass-card" 
+          onClick={() => setIsReportOpen(true)}
+          style={{ 
+            position: 'relative', 
+            overflow: 'hidden',
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(22, 30, 49, 0.7) 100%)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>Total Omset Penjualan</span>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>Total Omset Hari Ini</span>
             <span style={{ color: 'var(--success)', padding: '6px', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.1)' }}>
               <DollarSign size={18} />
             </span>
           </div>
-          <h2 style={{ fontSize: '28px', fontWeight: 800, margin: '0 0 6px 0', fontFamily: 'var(--font-display)' }} className="text-success">
-            {formatRupiah(totalOmset)}
+          <h2 style={{ fontSize: '28px', fontWeight: 800, margin: '0 0 4px 0', fontFamily: 'var(--font-display)' }} className="text-success">
+            {formatRupiah(totalOmsetToday)}
           </h2>
+          <span style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+            Lihat Laporan Harian ➔
+          </span>
         </div>
       </div>
 
@@ -442,6 +509,91 @@ const Dashboard: React.FC = () => {
               style={{ width: '100%', padding: '12px' }}
             >
               Batal
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. DAILY OMSET REPORT MODAL */}
+      {isReportOpen && (
+        <div className="modal-overlay" onClick={() => setIsReportOpen(false)} style={{ zIndex: 1000 }}>
+          <div className="modal-content animate-fade-in" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '450px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', padding: '24px 20px' }}>
+            <div className="modal-header" style={{ marginBottom: '16px', flexShrink: 0 }}>
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>🧾 Laporan Omset Harian</span>
+              </h3>
+              <button className="btn-icon-only" onClick={() => setIsReportOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Scrollable Report Content */}
+            <div style={{ overflowY: 'auto', flex: 1, paddingRight: '4px', marginBottom: '16px' }}>
+              {dailyOmsetReport.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '14px' }}>
+                  Belum ada transaksi penjualan yang tercatat.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {dailyOmsetReport.map((day, idx) => (
+                    <div 
+                      key={idx} 
+                      className="glass-card" 
+                      style={{ 
+                        padding: '14px 16px', 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        background: 'rgba(255,255,255,0.01)',
+                        borderRadius: '16px',
+                        border: '1px solid var(--border-color)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '16px' }}>📅</span>
+                        <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                          {day.tanggalStr}
+                        </span>
+                      </div>
+                      <span className="text-success" style={{ fontSize: '15px', fontWeight: 800, fontFamily: 'var(--font-display)' }}>
+                        {formatRupiah(day.total)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Sticky Bottom Section: Monthly total */}
+            <div style={{ 
+              flexShrink: 0,
+              padding: '16px', 
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(99, 102, 241, 0.08) 100%)',
+              border: '1px solid rgba(16, 185, 129, 0.2)',
+              borderRadius: '20px', 
+              marginBottom: '16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', display: 'block' }}>
+                  Total Bulan Ini
+                </span>
+                <span className="text-success" style={{ fontSize: '20px', fontWeight: 900, fontFamily: 'var(--font-display)', marginTop: '2px', display: 'block' }}>
+                  {formatRupiah(totalOmsetThisMonth)}
+                </span>
+              </div>
+              <span style={{ fontSize: '24px' }}>📈</span>
+            </div>
+
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={() => setIsReportOpen(false)}
+              style={{ width: '100%', padding: '12px', flexShrink: 0 }}
+            >
+              Tutup Laporan
             </button>
           </div>
         </div>
