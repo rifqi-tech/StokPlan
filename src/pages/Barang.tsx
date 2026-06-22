@@ -29,6 +29,7 @@ const Barang: React.FC = () => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [activeScanProductId, setActiveScanProductId] = useState<string | null>(null);
   const [scanMessage, setScanMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [manualBarcode, setManualBarcode] = useState('');
   
   // Modals for Products
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -113,10 +114,11 @@ const Barang: React.FC = () => {
           html5QrCode.start(
             { facingMode: "environment" },
             {
-              fps: 10,
+              fps: 15,
               qrbox: (width, height) => {
-                const size = Math.min(width, height) * 0.7;
-                return { width: size, height: size };
+                const qrboxWidth = Math.min(width * 0.85, 280);
+                const qrboxHeight = Math.min(height * 0.35, 100);
+                return { width: qrboxWidth, height: qrboxHeight };
               }
             },
             async (decodedText) => {
@@ -155,7 +157,7 @@ const Barang: React.FC = () => {
               // Ignore verbose errors
             }
           ).then(() => {
-            setScanMessage({ type: 'info', text: 'Kamera aktif. Arahkan ke barcode barang.' });
+            setScanMessage({ type: 'info', text: 'Kamera aktif. Arahkan barcode ke kotak pemindai.' });
           }).catch((err) => {
             console.error("Camera start error:", err);
             setScanMessage({ type: 'error', text: `Gagal mengakses kamera: ${err.message || err}` });
@@ -174,6 +176,28 @@ const Barang: React.FC = () => {
       };
     }
   }, [isScannerOpen, activeScanProductId]);
+
+  const handleManualSubmit = async () => {
+    if (!activeScanProductId) return;
+    const code = manualBarcode.trim();
+    if (!code) return;
+    setScanMessage({ type: 'info', text: `Memproses barcode: ${code}...` });
+    try {
+      await scanInBarcode(activeScanProductId, code);
+      setScanMessage({ 
+        type: 'success', 
+        text: `Berhasil mendaftarkan barcode: ${code}!` 
+      });
+      setManualBarcode('');
+      setTimeout(() => {
+        setIsScannerOpen(false);
+        setActiveScanProductId(null);
+        setScanMessage(null);
+      }, 1500);
+    } catch (err: any) {
+      setScanMessage({ type: 'error', text: err.message || 'Gagal memproses Scan In' });
+    }
+  };
 
   // Handlers for Transactions
   const openTxModal = (product: Product, type: 'masuk' | 'keluar') => {
@@ -630,6 +654,7 @@ const Barang: React.FC = () => {
                     <button
                       onClick={() => {
                         setScanMessage(null);
+                        setManualBarcode('');
                         setIsScannerOpen(true);
                         setActiveScanProductId(product.id);
                       }}
@@ -743,6 +768,7 @@ const Barang: React.FC = () => {
                     onClick={() => {
                       setIsTxModalOpen(false);
                       setScanMessage(null);
+                      setManualBarcode('');
                       setIsScannerOpen(true);
                       setActiveScanProductId(selectedProduct.id);
                     }}
@@ -1117,44 +1143,49 @@ const Barang: React.FC = () => {
               )}
             </div>
 
-            {/* Hardware Barcode Gun Input */}
-            <div style={{ marginBottom: '16px' }}>
-              <input 
-                type="text" 
-                placeholder="Atau tembak barcode dengan scanner gun..." 
-                className="input-control" 
-                style={{ 
-                  padding: '10px 14px', 
-                  fontSize: '13px', 
-                  borderRadius: '12px',
-                  background: 'rgba(255,255,255,0.03)',
-                  borderColor: 'rgba(255,255,255,0.1)'
-                }}
-                autoFocus
-                onKeyDown={async (e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const code = (e.target as HTMLInputElement).value.trim();
-                    if (!code) return;
-                    setScanMessage({ type: 'info', text: `Memproses barcode: ${code}...` });
-                    try {
-                      await scanInBarcode(activeScanProductId, code);
-                      setScanMessage({ 
-                        type: 'success', 
-                        text: `Berhasil mendaftarkan barcode: ${code}!` 
-                      });
-                      (e.target as HTMLInputElement).value = '';
-                      setTimeout(() => {
-                        setIsScannerOpen(false);
-                        setActiveScanProductId(null);
-                        setScanMessage(null);
-                      }, 1500);
-                    } catch (err: any) {
-                      setScanMessage({ type: 'error', text: err.message || 'Gagal memproses Scan In' });
+            {/* Manual input / Barcode gun */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
+                Ketik Manual / Barcode Gun
+              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input 
+                  type="text" 
+                  value={manualBarcode}
+                  onChange={(e) => setManualBarcode(e.target.value)}
+                  placeholder="Ketik kode barcode di sini..." 
+                  className="input-control" 
+                  style={{ 
+                    flex: 1,
+                    padding: '10px 14px', 
+                    fontSize: '13px', 
+                    borderRadius: '12px',
+                    background: 'rgba(255,255,255,0.03)',
+                    borderColor: 'rgba(255,255,255,0.1)'
+                  }}
+                  autoFocus
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleManualSubmit();
                     }
-                  }
-                }}
-              />
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleManualSubmit}
+                  className="btn btn-primary"
+                  style={{
+                    padding: '10px 16px',
+                    borderRadius: '12px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  OK / Simpan
+                </button>
+              </div>
             </div>
 
             {/* Scan Message / Status */}
