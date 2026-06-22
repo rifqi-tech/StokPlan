@@ -125,9 +125,9 @@ const Dashboard: React.FC = () => {
     <div className="main-content animate-fade-in">
       <div className="header-bar">
         <div>
-          <span className="text-xs text-muted font-mono" style={{ opacity: 0.6 }}>@rrippkii</span>
-          <h1 className="header-title" style={{ margin: 0, fontSize: '32px' }}>StokPlan</h1>
+          <span className="text-xs text-muted font-mono" style={{ opacity: 0.6, letterSpacing: '0.5px' }}>@rrippkii</span>
         </div>
+        <h1 className="header-title" style={{ margin: 0, fontSize: '26px' }}>StokPlan</h1>
       </div>
 
       <div style={{ 
