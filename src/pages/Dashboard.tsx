@@ -14,6 +14,7 @@ const Dashboard: React.FC = () => {
   // Report states
   const [isReportOpen, setIsReportOpen] = React.useState(false);
   const [reportDate, setReportDate] = React.useState(new Date());
+  const [profitDate, setProfitDate] = React.useState(new Date());
 
   const prevMonth = () => {
     setReportDate(prev => {
@@ -25,6 +26,22 @@ const Dashboard: React.FC = () => {
 
   const nextMonth = () => {
     setReportDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(newDate.getMonth() + 1);
+      return newDate;
+    });
+  };
+
+  const prevProfitMonth = () => {
+    setProfitDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(newDate.getMonth() - 1);
+      return newDate;
+    });
+  };
+
+  const nextProfitMonth = () => {
+    setProfitDate(prev => {
       const newDate = new Date(prev);
       newDate.setMonth(newDate.getMonth() + 1);
       return newDate;
@@ -57,6 +74,35 @@ const Dashboard: React.FC = () => {
       const product = products.find(p => p.id === t.product_id);
       const price = product ? product.harga_jual : 0;
       return sum + (t.jumlah * price);
+    }, 0);
+
+  // Hitung total keuntungan hari ini (harga jual - harga modal)
+  const totalKeuntunganToday = transactions
+    .filter(t => t.tipe === 'keluar')
+    .filter(t => new Date(t.created_at) >= todayStart)
+    .reduce((sum, t) => {
+      const product = products.find(p => p.id === t.product_id);
+      const jual = product ? product.harga_jual : 0;
+      const modal = product ? product.harga_modal : 0;
+      return sum + (t.jumlah * (jual - modal));
+    }, 0);
+
+  // Target month and year for profit calculation
+  const targetProfitMonth = profitDate.getMonth();
+  const targetProfitYear = profitDate.getFullYear();
+
+  // Hitung total keuntungan untuk bulan terpilih
+  const totalKeuntunganSelectedMonth = transactions
+    .filter(t => t.tipe === 'keluar')
+    .filter(t => {
+      const d = new Date(t.created_at);
+      return d.getMonth() === targetProfitMonth && d.getFullYear() === targetProfitYear;
+    })
+    .reduce((sum, t) => {
+      const product = products.find(p => p.id === t.product_id);
+      const jual = product ? product.harga_jual : 0;
+      const modal = product ? product.harga_modal : 0;
+      return sum + (t.jumlah * (jual - modal));
     }, 0);
 
   // Target month and year from reportDate state
@@ -440,6 +486,90 @@ const Dashboard: React.FC = () => {
             ))}
           </div>
         )}
+      </div>
+
+      {/* 4. TOTAL KEUNTUNGAN CARD (COMPACT & SENSITIVE) */}
+      <div 
+        className="glass-card" 
+        style={{ 
+          padding: '12px 14px', 
+          background: 'rgba(255, 255, 255, 0.01)',
+          border: '1px solid rgba(255, 255, 255, 0.04)',
+          borderRadius: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          marginTop: '4px'
+        }}
+      >
+        {/* Header: Title and Month Navigation */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            🔒 Total Keuntungan
+          </span>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button 
+              type="button" 
+              onClick={prevProfitMonth}
+              className="btn-icon-only" 
+              style={{ 
+                width: '24px', 
+                height: '24px', 
+                borderRadius: '6px', 
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <ChevronLeft size={12} />
+            </button>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
+              {profitDate.toLocaleString('id-ID', { month: 'short', year: 'numeric' })}
+            </span>
+            <button 
+              type="button" 
+              onClick={nextProfitMonth}
+              disabled={isFutureMonth(profitDate)}
+              className="btn-icon-only" 
+              style={{ 
+                width: '24px', 
+                height: '24px', 
+                borderRadius: '6px', 
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: isFutureMonth(profitDate) ? 0.3 : 1,
+                pointerEvents: isFutureMonth(profitDate) ? 'none' : 'auto'
+              }}
+            >
+              <ChevronRight size={12} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content Table */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Hari Ini</span>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+              {formatRupiah(totalKeuntunganToday)}
+            </span>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Bulan {profitDate.toLocaleString('id-ID', { month: 'long' })}
+            </span>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+              {formatRupiah(totalKeuntunganSelectedMonth)}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* GLOBAL SCAN OUT SCANNER MODAL */}
