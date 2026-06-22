@@ -51,6 +51,7 @@ interface StokContextType {
   addProduct: (nama: string, hargaModal: number, hargaJual: number, stokAwal: number, categoryId?: string | null) => Promise<void>;
   updateProduct: (id: string, nama: string, hargaModal: number, hargaJual: number, categoryId?: string | null) => Promise<void>;
   addTransaction: (productId: string, tipe: 'masuk' | 'keluar', jumlah: number) => Promise<void>;
+  addScanTransaction: (amount: number, description: string) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addCategory: (nama: string) => Promise<void>;
   updateCategory: (id: string, nama: string) => Promise<void>;
@@ -503,6 +504,88 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const addScanTransaction = async (amount: number, description: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (!user) throw new Error('Pengguna tidak terautentikasi');
+      const namaItem = `Scan Struk: ${description.trim() || 'Umum'} (#${Date.now().toString().slice(-4)})`;
+
+      if (isSupabaseConfigured && supabase) {
+        // 1. Insert product (stok 0 initially)
+        const { data: newProd, error: pError } = await supabase
+          .from('products')
+          .insert([{
+            nama_barang: namaItem,
+            harga_modal: amount,
+            harga_jual: amount,
+            stok: 0,
+            category_id: null,
+            user_id: user.id
+          }])
+          .select()
+          .single();
+
+        if (pError) throw pError;
+
+        if (newProd) {
+          // 2. Insert both masuk (stok awal) and keluar (penjualan) transactions to keep audit trail
+          const { error: tError } = await supabase
+            .from('stock_transactions')
+            .insert([
+              { product_id: newProd.id, tipe: 'masuk', jumlah: 1 },
+              { product_id: newProd.id, tipe: 'keluar', jumlah: 1 }
+            ]);
+          if (tError) throw tError;
+        }
+
+        await fetchFromSupabase();
+      } else {
+        // Local mock mode
+        const mockProdId = `p_scan_${Date.now()}`;
+        const newProduct: Product = {
+          id: mockProdId,
+          nama_barang: namaItem,
+          harga_modal: amount,
+          harga_jual: amount,
+          stok: 0,
+          category_id: null,
+          user_id: user.id,
+          created_at: new Date().toISOString()
+        };
+
+        const initialTx: StockTransaction = {
+          id: `t_in_${Date.now()}`,
+          product_id: mockProdId,
+          tipe: 'masuk',
+          jumlah: 1,
+          created_at: new Date().toISOString()
+        };
+
+        const saleTx: StockTransaction = {
+          id: `t_out_${Date.now()}`,
+          product_id: mockProdId,
+          tipe: 'keluar',
+          jumlah: 1,
+          created_at: new Date().toISOString()
+        };
+
+        const updatedProducts = [newProduct, ...products];
+        const updatedTransactions = [initialTx, saleTx, ...transactions];
+
+        setProducts(updatedProducts);
+        setTransactions(updatedTransactions);
+        saveToLocalStorage(updatedProducts, updatedTransactions);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Gagal menyimpan hasil scan struk');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const addTransaction = async (productId: string, tipe: 'masuk' | 'keluar', jumlah: number) => {
     setLoading(true);
     setError(null);
@@ -712,6 +795,7 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addProduct,
       updateProduct: updateProduct,
       addTransaction,
+      addScanTransaction,
       deleteProduct,
       addCategory,
       updateCategory,

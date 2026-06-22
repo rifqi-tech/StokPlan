@@ -473,3 +473,83 @@ h1, h2, h3, h4, h5, h6 {
 .font-semibold { font-weight: 600; }
 .font-bold { font-weight: 700; }
 .font-black { font-weight: 900; }
+
+/* Floating Camera Action Button (FAB) */
+.camera-fab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.camera-fab-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(217, 70, 239, 0.4), var(--shadow-glow-pink);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  transition: var(--transition-spring);
+  margin-top: -18px; /* Elevated look */
+}
+
+.camera-fab:hover .camera-fab-circle {
+  transform: scale(1.1) translateY(-4px);
+  box-shadow: 0 6px 20px rgba(217, 70, 239, 0.6), var(--shadow-glow-pink);
+}
+
+.camera-fab:active .camera-fab-circle {
+  transform: scale(0.95);
+}
+
+/* Scanning Overlay Styles */
+.scanner-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 7, 18, 0.95);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  gap: 28px;
+  color: #fff;
+}
+
+.scanner-viewfinder {
+  position: relative;
+  width: 260px;
+  height: 360px;
+  border-radius: 24px;
+  border: 2px solid rgba(99, 102, 241, 0.4);
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.8), var(--shadow-glow);
+  overflow: hidden;
+}
+
+/* Glowing Laser Line moving up and down */
+.scan-laser {
+  position: absolute;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(to right, transparent, #34d399, #10b981, #34d399, transparent);
+  box-shadow: 0 0 15px #34d399, 0 0 8px #10b981;
+  animation: scanLaser 2s infinite ease-in-out;
+  z-index: 2;
+}
+
+@keyframes scanLaser {
+  0% { top: 0%; }
+  50% { top: 98%; }
+  100% { top: 0%; }
+}
