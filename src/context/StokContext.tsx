@@ -29,6 +29,15 @@ export interface StockTransaction {
   harga_jual?: number;  // joined in frontend
 }
 
+export interface ProductBarcode {
+  id: string;
+  product_id: string;
+  barcode_code: string;
+  status: 'in_stock' | 'sold';
+  created_at?: string;
+  user_id?: string | null;
+}
+
 // Custom simple user type for mock mode
 interface MockUser {
   id: string;
@@ -39,6 +48,7 @@ interface StokContextType {
   products: Product[];
   transactions: StockTransaction[];
   categories: Category[];
+  barcodes: ProductBarcode[];
   user: User | MockUser | null;
   loading: boolean;
   error: string | null;
@@ -52,6 +62,8 @@ interface StokContextType {
   updateProduct: (id: string, nama: string, hargaModal: number, hargaJual: number, categoryId?: string | null) => Promise<void>;
   addTransaction: (productId: string, tipe: 'masuk' | 'keluar', jumlah: number) => Promise<void>;
   addScanTransaction: (amount: number, description: string) => Promise<void>;
+  scanInBarcode: (productId: string, barcode: string) => Promise<void>;
+  scanOutBarcode: (barcode: string) => Promise<string>;
   deleteProduct: (id: string) => Promise<void>;
   addCategory: (nama: string) => Promise<void>;
   updateCategory: (id: string, nama: string) => Promise<void>;
@@ -81,6 +93,7 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [products, setProducts] = useState<Product[]>([]);
   const [transactions, setTransactions] = useState<StockTransaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [barcodes, setBarcodes] = useState<ProductBarcode[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,6 +120,12 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .order('created_at', { ascending: false });
       if (tError) throw tError;
       setTransactions(tData || []);
+
+      const { data: bData, error: bError } = await supabase
+        .from('product_barcodes')
+        .select('*');
+      if (bError) throw bError;
+      setBarcodes(bData || []);
     } catch (err: any) {
       console.error('Supabase fetch error:', err);
       setError(err.message || 'Gagal mengambil data dari Supabase.');
@@ -133,6 +152,7 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setProducts([]);
           setTransactions([]);
           setCategories([]);
+          setBarcodes([]);
         }
       });
 
@@ -207,19 +227,23 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const storedCategories = localStorage.getItem('stokplan_categories');
           const storedProducts = localStorage.getItem('stokplan_products');
           const storedTransactions = localStorage.getItem('stokplan_transactions');
+          const storedBarcodes = localStorage.getItem('stokplan_barcodes');
 
           const allCats: Category[] = storedCategories ? JSON.parse(storedCategories) : [];
           const allProds: Product[] = storedProducts ? JSON.parse(storedProducts) : [];
           const allTxs: StockTransaction[] = storedTransactions ? JSON.parse(storedTransactions) : [];
+          const allBarcodes: ProductBarcode[] = storedBarcodes ? JSON.parse(storedBarcodes) : [];
 
           // Filter by active mock user ID
           const userCats = allCats.filter(c => c.user_id === user.id);
           const userProds = allProds.filter(p => p.user_id === user.id);
           const userTxs = allTxs.filter(t => userProds.some(p => p.id === t.product_id));
+          const userBarcodes = allBarcodes.filter(b => b.user_id === user.id);
 
           setCategories(userCats);
           setProducts(userProds);
           setTransactions(userTxs);
+          setBarcodes(userBarcodes);
         } catch (err) {
           console.error('Local filter error:', err);
         }
@@ -227,6 +251,7 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCategories([]);
         setProducts([]);
         setTransactions([]);
+        setBarcodes([]);
       }
     } else if (user) {
       fetchFromSupabase();
@@ -659,6 +684,13 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const updatedProducts = products.filter(p => p.id !== id);
         const updatedTransactions = transactions.filter(t => t.product_id !== id);
 
+        // Hapus barcode barang yang bersangkutan di mode luring
+        const storedBarcodes = localStorage.getItem('stokplan_barcodes');
+        const allBarcodes: ProductBarcode[] = storedBarcodes ? JSON.parse(storedBarcodes) : [];
+        const updatedBarcodes = allBarcodes.filter(b => b.product_id !== id);
+        localStorage.setItem('stokplan_barcodes', JSON.stringify(updatedBarcodes));
+        setBarcodes(updatedBarcodes.filter(b => b.user_id === user.id));
+
         setProducts(updatedProducts);
         setTransactions(updatedTransactions);
         saveToLocalStorage(updatedProducts, updatedTransactions);
@@ -666,6 +698,235 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Gagal menghapus barang');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const scanInBarcode = async (productId: string, barcode: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (!user) throw new Error('Pengguna tidak terautentikasi');
+      if (!barcode.trim()) throw new Error('Kode barcode tidak boleh kosong');
+
+      if (isSupabaseConfigured && supabase) {
+        // Cek jika barcode sudah terdaftar di stok yang aktif
+        const { data: existing, error: findErr } = await supabase
+          .from('product_barcodes')
+          .select('*')
+          .eq('barcode_code', barcode.trim())
+          .eq('user_id', user.id);
+
+        if (findErr) throw findErr;
+
+        if (existing && existing.length > 0) {
+          const activeBarcode = existing.find(b => b.status === 'in_stock');
+          if (activeBarcode) {
+            throw new Error(`Barcode ${barcode} sudah ada dalam stok!`);
+          }
+
+          // Jika ada tapi status 'sold', perbarui kembali ke 'in_stock'
+          const soldBarcode = existing.find(b => b.status === 'sold');
+          if (soldBarcode) {
+            const { error: updErr } = await supabase
+              .from('product_barcodes')
+              .update({ status: 'in_stock', product_id: productId })
+              .eq('id', soldBarcode.id);
+            if (updErr) throw updErr;
+          }
+        } else {
+          // Daftarkan barcode baru
+          const { error: insErr } = await supabase
+            .from('product_barcodes')
+            .insert([{
+              product_id: productId,
+              barcode_code: barcode.trim(),
+              status: 'in_stock',
+              user_id: user.id
+            }]);
+          if (insErr) throw insErr;
+        }
+
+        // Jalankan RPC adjust_stock untuk tambah stok (+1) dan buat transaksi masuk
+        const { error: rpcErr } = await supabase
+          .rpc('adjust_stock', {
+            p_product_id: productId,
+            p_tipe: 'masuk',
+            p_jumlah: 1
+          });
+        if (rpcErr) throw rpcErr;
+
+        await fetchFromSupabase();
+      } else {
+        // Mode Mock LocalStorage
+        const storedBarcodes = localStorage.getItem('stokplan_barcodes');
+        const allBarcodes: ProductBarcode[] = storedBarcodes ? JSON.parse(storedBarcodes) : [];
+        
+        const existingBarcode = allBarcodes.find(
+          b => b.barcode_code === barcode.trim() && b.user_id === user.id
+        );
+
+        if (existingBarcode && existingBarcode.status === 'in_stock') {
+          throw new Error(`Barcode ${barcode} sudah ada dalam stok!`);
+        }
+
+        let updatedBarcodesList: ProductBarcode[];
+        if (existingBarcode && existingBarcode.status === 'sold') {
+          updatedBarcodesList = allBarcodes.map(b => {
+            if (b.id === existingBarcode.id) {
+              return { ...b, status: 'in_stock', product_id: productId };
+            }
+            return b;
+          });
+        } else {
+          const newB: ProductBarcode = {
+            id: `b_${Date.now()}`,
+            product_id: productId,
+            barcode_code: barcode.trim(),
+            status: 'in_stock',
+            user_id: user.id,
+            created_at: new Date().toISOString()
+          };
+          updatedBarcodesList = [...allBarcodes, newB];
+        }
+
+        const updatedProducts = products.map(p => {
+          if (p.id === productId) {
+            return { ...p, stok: p.stok + 1 };
+          }
+          return p;
+        });
+
+        const newTx: StockTransaction = {
+          id: `tx_${Date.now()}`,
+          product_id: productId,
+          tipe: 'masuk',
+          jumlah: 1,
+          created_at: new Date().toISOString()
+        };
+        const updatedTransactions = [newTx, ...transactions];
+
+        setProducts(updatedProducts);
+        setTransactions(updatedTransactions);
+        const userBarcodes = updatedBarcodesList.filter(b => b.user_id === user.id);
+        setBarcodes(userBarcodes);
+
+        localStorage.setItem('stokplan_barcodes', JSON.stringify(updatedBarcodesList));
+        saveToLocalStorage(updatedProducts, updatedTransactions);
+      }
+    } catch (err: any) {
+      console.error('Scan in error:', err);
+      setError(err.message || 'Gagal memproses Scan In');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const scanOutBarcode = async (barcode: string): Promise<string> => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (!user) throw new Error('Pengguna tidak terautentikasi');
+      if (!barcode.trim()) throw new Error('Kode barcode tidak boleh kosong');
+
+      if (isSupabaseConfigured && supabase) {
+        // Cari barcode aktif
+        const { data: bData, error: bError } = await supabase
+          .from('product_barcodes')
+          .select('*, products(nama_barang)')
+          .eq('barcode_code', barcode.trim())
+          .eq('status', 'in_stock')
+          .eq('user_id', user.id);
+
+        if (bError) throw bError;
+
+        if (!bData || bData.length === 0) {
+          throw new Error(`Barcode ${barcode} tidak ada dalam stok atau sudah terjual!`);
+        }
+
+        const barcodeRow = bData[0];
+        const productId = barcodeRow.product_id;
+        const productName = (barcodeRow.products as any)?.nama_barang || 'Barang';
+
+        // Ubah status ke sold
+        const { error: updErr } = await supabase
+          .from('product_barcodes')
+          .update({ status: 'sold' })
+          .eq('id', barcodeRow.id);
+        if (updErr) throw updErr;
+
+        // Jalankan RPC adjust_stock untuk kurangi stok (-1) dan buat transaksi keluar
+        const { error: rpcErr } = await supabase
+          .rpc('adjust_stock', {
+            p_product_id: productId,
+            p_tipe: 'keluar',
+            p_jumlah: 1
+          });
+        if (rpcErr) throw rpcErr;
+
+        await fetchFromSupabase();
+        return productName;
+      } else {
+        // Mode Mock LocalStorage
+        const storedBarcodes = localStorage.getItem('stokplan_barcodes');
+        const allBarcodes: ProductBarcode[] = storedBarcodes ? JSON.parse(storedBarcodes) : [];
+
+        const barcodeRow = allBarcodes.find(
+          b => b.barcode_code === barcode.trim() && b.status === 'in_stock' && b.user_id === user.id
+        );
+
+        if (!barcodeRow) {
+          throw new Error(`Barcode ${barcode} tidak ada dalam stok atau sudah terjual!`);
+        }
+
+        const product = products.find(p => p.id === barcodeRow.product_id);
+        if (!product) {
+          throw new Error('Barang terkait barcode ini tidak ditemukan!');
+        }
+
+        if (product.stok < 1) {
+          throw new Error(`Stok untuk barang "${product.nama_barang}" tidak mencukupi untuk dikurangi!`);
+        }
+
+        const updatedBarcodesList = allBarcodes.map(b => {
+          if (b.id === barcodeRow.id) {
+            return { ...b, status: 'sold' as const };
+          }
+          return b;
+        });
+
+        const updatedProducts = products.map(p => {
+          if (p.id === product.id) {
+            return { ...p, stok: p.stok - 1 };
+          }
+          return p;
+        });
+
+        const newTx: StockTransaction = {
+          id: `tx_${Date.now()}`,
+          product_id: product.id,
+          tipe: 'keluar',
+          jumlah: 1,
+          created_at: new Date().toISOString()
+        };
+        const updatedTransactions = [newTx, ...transactions];
+
+        setProducts(updatedProducts);
+        setTransactions(updatedTransactions);
+        const userBarcodes = updatedBarcodesList.filter(b => b.user_id === user.id);
+        setBarcodes(userBarcodes);
+
+        localStorage.setItem('stokplan_barcodes', JSON.stringify(updatedBarcodesList));
+        saveToLocalStorage(updatedProducts, updatedTransactions);
+
+        return product.nama_barang;
+      }
+    } catch (err: any) {
+      console.error('Scan out error:', err);
+      setError(err.message || 'Gagal memproses Scan Out');
       throw err;
     } finally {
       setLoading(false);
@@ -783,6 +1044,7 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
       products,
       transactions: enrichedTransactions,
       categories,
+      barcodes,
       user,
       loading,
       error,
@@ -796,6 +1058,8 @@ export const StokProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateProduct: updateProduct,
       addTransaction,
       addScanTransaction,
+      scanInBarcode,
+      scanOutBarcode,
       deleteProduct,
       addCategory,
       updateCategory,

@@ -553,3 +553,31 @@ h1, h2, h3, h4, h5, h6 {
   50% { top: 98%; }
   100% { top: 0%; }
 }
+
+/* Custom styling for html5-qrcode library camera container */
+#barang-scanner-reader video,
+#dashboard-scanner-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 14px !important;
+}
+
+#barang-scanner-reader,
+#dashboard-scanner-reader {
+  border: none !important;
+  background: #000 !important;
+}
+
+#barang-scanner-reader__header_message,
+#dashboard-scanner-reader__header_message,
+#barang-scanner-reader__scan_region,
+#dashboard-scanner-reader__scan_region {
+  display: none !important;
+}
+
+@keyframes laser-scan {
+  0% { top: 5%; }
+  50% { top: 95%; }
+  100% { top: 5%; }
+}

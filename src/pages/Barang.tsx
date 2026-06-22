@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useStok, type Product, type Category } from '../context/StokContext';
 import { Package, Search, Plus, Minus, Edit3, X, AlertTriangle, Trash2, Folder, FolderPlus, ArrowLeft } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { Html5Qrcode } from 'html5-qrcode';
 
 const Barang: React.FC = () => {
   const { 
@@ -12,7 +13,8 @@ const Barang: React.FC = () => {
     deleteProduct, 
     addCategory, 
     updateCategory, 
-    deleteCategory, 
+    deleteCategory,
+    scanInBarcode,
     error, 
     clearError, 
     loading 
@@ -22,6 +24,11 @@ const Barang: React.FC = () => {
   const activeCategoryId = searchParams.get('category_id'); // null means we are on the folder list
   
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Barcode scanner states
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [activeScanProductId, setActiveScanProductId] = useState<string | null>(null);
+  const [scanMessage, setScanMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   
   // Modals for Products
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -85,6 +92,88 @@ const Barang: React.FC = () => {
       }
       return a.nama_barang.localeCompare(b.nama_barang);
     });
+
+  // Lifecycle hook for barcode scanner camera
+  React.useEffect(() => {
+    let html5QrCode: Html5Qrcode | null = null;
+    
+    if (isScannerOpen && activeScanProductId) {
+      setScanMessage({ type: 'info', text: 'Menginisialisasi kamera...' });
+      
+      const timer = setTimeout(() => {
+        const elementId = "barang-scanner-reader";
+        const element = document.getElementById(elementId);
+        if (!element) {
+          setScanMessage({ type: 'error', text: 'Gagal menemukan area pemindai kamera.' });
+          return;
+        }
+
+        try {
+          html5QrCode = new Html5Qrcode(elementId);
+          html5QrCode.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: (width, height) => {
+                const size = Math.min(width, height) * 0.7;
+                return { width: size, height: size };
+              }
+            },
+            async (decodedText) => {
+              setScanMessage({ type: 'info', text: `Barcode terdeteksi: ${decodedText}. Memproses...` });
+              
+              // Play a beep sound using Web Audio API
+              try {
+                const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(1000, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.1);
+              } catch (beepErr) {
+                console.log("Audio feedback failed:", beepErr);
+              }
+
+              try {
+                await scanInBarcode(activeScanProductId, decodedText);
+                setScanMessage({ type: 'success', text: `Berhasil mendaftarkan barcode: ${decodedText}!` });
+                
+                setTimeout(() => {
+                  setIsScannerOpen(false);
+                  setActiveScanProductId(null);
+                  setScanMessage(null);
+                }, 1300);
+              } catch (err: any) {
+                setScanMessage({ type: 'error', text: err.message || 'Gagal memproses Scan In' });
+              }
+            },
+            () => {
+              // Ignore verbose errors
+            }
+          ).then(() => {
+            setScanMessage({ type: 'info', text: 'Kamera aktif. Arahkan ke barcode barang.' });
+          }).catch((err) => {
+            console.error("Camera start error:", err);
+            setScanMessage({ type: 'error', text: `Gagal mengakses kamera: ${err.message || err}` });
+          });
+        } catch (initErr: any) {
+          console.error("Scanner init error:", initErr);
+          setScanMessage({ type: 'error', text: `Gagal menginisialisasi kamera: ${initErr.message || initErr}` });
+        }
+      }, 300);
+
+      return () => {
+        clearTimeout(timer);
+        if (html5QrCode && html5QrCode.isScanning) {
+          html5QrCode.stop().catch(err => console.error("Error stopping scanner:", err));
+        }
+      };
+    }
+  }, [isScannerOpen, activeScanProductId]);
 
   // Handlers for Transactions
   const openTxModal = (product: Product, type: 'masuk' | 'keluar') => {
@@ -528,24 +617,47 @@ const Barang: React.FC = () => {
                   </div>
 
                   {/* TRANSACTION BUTTONS */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.2fr', gap: '8px' }}>
                     <button 
                       onClick={() => openTxModal(product, 'masuk')} 
                       className="btn btn-secondary" 
-                      style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '10px' }}
+                      style={{ padding: '8px 4px', fontSize: '12px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                     >
-                      <Plus size={14} className="text-success" />
-                      Stok Masuk
+                      <Plus size={12} className="text-success" />
+                      Masuk +
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setScanMessage(null);
+                        setIsScannerOpen(true);
+                        setActiveScanProductId(product.id);
+                      }}
+                      className="btn btn-secondary"
+                      style={{ 
+                        padding: '8px 4px', 
+                        fontSize: '12px', 
+                        borderRadius: '10px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        borderColor: 'var(--primary)',
+                        color: 'var(--primary)',
+                        background: 'rgba(99, 102, 241, 0.05)'
+                      }}
+                      title="Scan In Barcode"
+                    >
+                      <span>📷 Scan</span>
                     </button>
                     
                     <button 
                       onClick={() => openTxModal(product, 'keluar')} 
                       className="btn btn-secondary" 
                       disabled={product.stok === 0}
-                      style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '10px', opacity: product.stok === 0 ? 0.4 : 1 }}
+                      style={{ padding: '8px 4px', fontSize: '12px', borderRadius: '10px', opacity: product.stok === 0 ? 0.4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                     >
-                      <Minus size={14} className="text-danger" />
-                      Stok Keluar
+                      <Minus size={12} className="text-danger" />
+                      Keluar -
                     </button>
                   </div>
                 </div>
@@ -618,6 +730,41 @@ const Barang: React.FC = () => {
                   </button>
                 ))}
               </div>
+
+              {txType === 'masuk' && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '10px 0' }}>
+                    <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }}></div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>atau</span>
+                    <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }}></div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTxModalOpen(false);
+                      setScanMessage(null);
+                      setIsScannerOpen(true);
+                      setActiveScanProductId(selectedProduct.id);
+                    }}
+                    className="btn btn-primary"
+                    style={{
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                      boxShadow: '0 0 15px rgba(99, 102, 241, 0.4)',
+                      border: 'none',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      width: '100%'
+                    }}
+                  >
+                    <span>📷 Scan Barcode Masuk</span>
+                  </button>
+                </div>
+              )}
 
               {(validationError || error) && (
                 <div className="badge badge-danger" style={{ width: '100%', borderRadius: '12px', padding: '10px 14px', marginBottom: '20px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
@@ -910,6 +1057,102 @@ const Barang: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 7. CAMERA SCANNER MODAL */}
+      {isScannerOpen && activeScanProductId && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal-content" style={{ maxWidth: '450px', background: '#090d16', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">📷 Pindai Barcode Unit</h3>
+              <button 
+                className="btn-icon-only" 
+                onClick={() => {
+                  setIsScannerOpen(false);
+                  setActiveScanProductId(null);
+                  setScanMessage(null);
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Mendaftarkan unit baru untuk:</span>
+              <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '2px' }}>
+                {products.find(p => p.id === activeScanProductId)?.nama_barang || 'Barang'}
+              </div>
+            </div>
+
+            {/* Camera Viewfinder Box */}
+            <div style={{ 
+              position: 'relative', 
+              width: '100%', 
+              background: '#000', 
+              borderRadius: '16px', 
+              overflow: 'hidden', 
+              border: '2px solid rgba(99, 102, 241, 0.3)',
+              boxShadow: '0 0 20px rgba(99, 102, 241, 0.15)',
+              aspectRatio: '1',
+              marginBottom: '16px'
+            }}>
+              <div id="barang-scanner-reader" style={{ width: '100%', height: '100%' }}></div>
+              
+              {/* Overlay Laser Scan Effect */}
+              {scanMessage?.type === 'info' && scanMessage.text.includes('Kamera aktif') && (
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '4px',
+                  background: 'var(--primary)',
+                  boxShadow: '0 0 12px var(--primary)',
+                  animation: 'laser-scan 2.5s infinite linear',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }}></div>
+              )}
+            </div>
+
+            {/* Scan Message / Status */}
+            {scanMessage && (
+              <div className={`badge ${
+                scanMessage.type === 'success' ? 'badge-success' : 
+                scanMessage.type === 'error' ? 'badge-danger' : 'badge-info'
+              }`} style={{ 
+                width: '100%', 
+                borderRadius: '12px', 
+                padding: '12px 14px', 
+                display: 'flex', 
+                gap: '8px', 
+                alignItems: 'flex-start',
+                textAlign: 'left',
+                fontSize: '13px',
+                lineHeight: 1.4,
+                marginBottom: '16px'
+              }}>
+                {scanMessage.type === 'success' && <span>✅</span>}
+                {scanMessage.type === 'error' && <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: '1px' }} />}
+                {scanMessage.type === 'info' && <span className="animate-pulse">🔄</span>}
+                <span style={{ fontWeight: 500 }}>{scanMessage.text}</span>
+              </div>
+            )}
+
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={() => {
+                setIsScannerOpen(false);
+                setActiveScanProductId(null);
+                setScanMessage(null);
+              }}
+              style={{ width: '100%', padding: '12px' }}
+            >
+              Batal
+            </button>
           </div>
         </div>
       )}

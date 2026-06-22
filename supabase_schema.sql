@@ -7,6 +7,7 @@
 -- =========================================================================
 
 -- 1. Hapus tabel jika sudah ada (Wajib untuk mereset ke skema multi-toko baru)
+DROP TABLE IF EXISTS product_barcodes CASCADE;
 DROP TABLE IF EXISTS stock_transactions CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
@@ -146,3 +147,28 @@ BEGIN
 
 END;
 $$;
+
+-- =========================================================================
+-- 8. MEMBUAT TABEL BARCODE UNIK (product_barcodes)
+-- =========================================================================
+CREATE TABLE product_barcodes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE NOT NULL,
+    barcode_code TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('in_stock', 'sold')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    user_id UUID DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
+    UNIQUE (barcode_code, user_id)
+);
+
+-- Index untuk performa pencarian barcode
+CREATE INDEX idx_barcodes_code ON product_barcodes (barcode_code);
+CREATE INDEX idx_barcodes_product ON product_barcodes (product_id);
+CREATE INDEX idx_barcodes_user ON product_barcodes (user_id);
+
+-- Aktifkan RLS
+ALTER TABLE product_barcodes ENABLE ROW LEVEL SECURITY;
+
+-- Kebijakan RLS untuk product_barcodes
+CREATE POLICY "Users can manage their own product barcodes" ON product_barcodes
+    FOR ALL USING (auth.uid() = user_id);
